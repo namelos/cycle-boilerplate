@@ -1,6 +1,6 @@
 import Rx from 'rxjs/Rx'
 const { Observable } = Rx
-const { of, from } = Observable
+const { of, from, zip, merge, combineLatest, sample, forkJoin, range } = Observable
 const log = console.log.bind(console)
 
 const data = [
@@ -37,24 +37,39 @@ const parseString = item => {
   const pair = item.split('-')
   const category = pair[0]
   const quantity = parseInt(pair[1] || 1)
-  return { category, quantity }
+  return [category, quantity]
 }
-const categoryOfItem = item => item.category
-const sumQuantity = (x, y) => ({ ...x, quantity: x.quantity + y.quantity })
-const searchDict = item => ({ ...dict[item.category], ...item })
-const subtotal = item => ({ subtotal: item.price * item.quantity, ...item })
 
-const model$ = from(data)
-  .map(parseString)
-  .groupBy(categoryOfItem)
-  .flatMap(item$ => item$.reduce(sumQuantity))
-  .map(searchDict)
-  .map(subtotal)
+const getCategory = ([category]) => category // auxilary functions
+const getQuantity = ([_, quantity]) => quantity
+const getPrice = category => dict[category].price
+const sum = (x, y) => x + y
 
-const subtotalOfItem = item => item.subtotal
-const total = (x, y) => x + y
+const model$ = from(data)                    // input data stream
 
-const total$ = model$
-  .map(subtotalOfItem)
-  .reduce(total)
+const items$$ = model$.map(parseString)      // items metastream
+  .groupBy(getCategory)
+
+const quantity$ = items$$                    // quantity stream
+  .flatMap(items$ =>
+    items$.map(getQuantity).reduce(sum))
+
+const category$ = items$$                    // category stream
+  .flatMap(items$ =>
+    items$.map(getCategory).last())
+
+const price$ = category$                     // price stream
+  .map(getPrice)
+
+const subtotal$ = zip(price$, quantity$,     // subtotal stream
+  (price, quantity) => price * quantity)
+
+const total$ = subtotal$.reduce(sum)        // total stream
+
+const main$ = zip(category$, quantity$, price$, subtotal$,
+  (category, quantity, price, subtotal) => ({ category, quantity, price, subtotal }))
+
+const output$ = main$.map(({ category, quantity, price, subtotal }) => `
+name: ${ category }, quantity: ${ quantity }, price: ${ price }, subtotal: ${ subtotal }`)
+  .reduce(sum)
   .subscribe(log)
