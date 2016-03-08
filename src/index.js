@@ -1,4 +1,4 @@
-import Rx from 'rxjs/Rx'
+import Rx from 'rxjs'
 const { Observable } = Rx
 const { of, from, zip, merge, combineLatest, sample, forkJoin, range } = Observable
 const log = console.log.bind(console)
