@@ -1,73 +1,70 @@
 import Rx from 'rxjs'
+import { parseString, first } from './auxiliary'
+import { contains, head, last, add, subtract, multiply, prop, __ } from 'ramda'
+import { calcBuyOneGetOneFree, calcNinetyFivePercentDiscount, getFormulae } from './mapping'
+import { data, dict, buyOneGetOneFree, ninetyFivePercentDiscount } from './data'
+
 const { Observable } = Rx
-const { of, from, zip, merge } = Observable
-const log = console.log.bind(console)
+const { of, from, zip } = Observable
 
-const data = ['ITEM000001', 'ITEM000001', 'ITEM000001', 'ITEM000001', 'ITEM000001', 'ITEM000003-2', 'ITEM000005', 'ITEM000005', 'ITEM000005']
+const main = (input, dict) => {
+  const items$$ = from(data).map(parseString).groupBy(head)
 
-const buyOneGetOneFree = '买一赠一'
-const ninetyFivePercentDiscount = '九五折'
+  const category$ = items$$.flatMap(item$ => item$.map(head).last())
+  const quantity$ = items$$.flatMap(item$ => item$.map(last).reduce(add))
 
-const dict = {
-  ITEM000001: { name: '羽毛球', price: 1, unit: '个', discounts: [buyOneGetOneFree, ninetyFivePercentDiscount] },
-  ITEM000003: { name: '苹果', price: 5.5, unit: '斤', discounts: [ninetyFivePercentDiscount] },
-  ITEM000005: { name: '可口可乐', price: 3, unit: '瓶', discounts: [buyOneGetOneFree] }
+  const info$ = category$.map(prop(__, dict))
+  const unit$ = info$.map(prop('unit'))
+  const price$ = info$.map(prop('price'))
+  const discounts$ = info$.map(prop('discounts'))
+
+  const formulae$ = discounts$.map(getFormulae)
+
+  const subtotalWithoutDiscount$ = zip(quantity$, price$, multiply)
+  const subtotal$ = zip(price$, quantity$, formulae$,
+    (price, quantity, formulae) => formulae(price, quantity))
+
+  const saved$ = zip(subtotalWithoutDiscount$, subtotal$, subtract)
+
+  const listView$ = zip(category$, price$, unit$, quantity$, subtotal$, saved$,
+    (category, price, unit, quantity, subtotal, saved) =>
+      ({ category, price, unit, quantity, subtotal, saved }))
+
+  return of({ listView$ })
 }
 
-const calcNinetyFivePercentDiscount = (price, quantity) =>
-price * quantity * 0.95
+const render = result$ => {
+  const renderListItem = ({ category, price, unit, quantity, subtotal, saved }) => {
+    const savedString =  saved ? `, saved: ${ saved }` : ''
+    return `category: ${ category }, price: ${ price }, unit: ${ unit }, quantity: ${ quantity }${ savedString }\n`
+  }
 
-const calcBuyOneGetOneFree = (price, quantity) =>
-price * (quantity - parseInt(quantity / 3))
-
-const formulae = {
-  [[buyOneGetOneFree, ninetyFivePercentDiscount]]: calcBuyOneGetOneFree,
-  [[buyOneGetOneFree]]: calcBuyOneGetOneFree,
-  [[ninetyFivePercentDiscount]]: calcNinetyFivePercentDiscount
+  result$
+    .flatMap(({ listView$ }) => listView$.map(renderListItem).reduce(add))
+    .subscribe(console::console.log)
 }
 
-const parseString = item => {
-  const pair = item.split('-')
-  const category = pair[0]
-  const quantity = parseInt(pair[1] || 1)
-  return [category, quantity]
-}
 
-const sum = (x, y) => x + y
-const difference = (x, y) => x - y
-const multiply = (x, y) => x * y
+render(main(data, dict))
 
-const first = ([category]) => category
-const second = ([_, quantity]) => quantity
 
-const getUnit = category => dict[category].unit
-const getPrice = category => dict[category].price
-const getFormulae = category => formulae[dict[category].discounts] || multiply
-
-const items$ = from(data)
-  .map(parseString)
-  .groupBy(first)
-  .flatMap(item$ => {
-    const category$ = item$.map(first).last()
-
-    const quantity$ = item$.map(second).reduce(sum)
-
-    const unit$ = category$.map(getUnit)
-
-    const unitQuantity$ = zip(quantity$, unit$, sum)
-
-    const price$ = category$.map(getPrice)
-
-    const discount$ = category$.map(getFormulae)
-
-    const subtotalWithOutDiscount$ = zip(quantity$, price$, multiply)
-
-    const subtotal$ = zip(price$, quantity$, discount$,
-      (price, quantity, discount) => discount(price, quantity))
-
-    const saved$ = zip(subtotalWithOutDiscount$, subtotal$, difference)
-
-    return zip(category$, unitQuantity$, price$, discount$, subtotal$, saved$,
-      (category, unitQuantity, price, discount, subtotal, saved) =>
-        ({ category, unitQuantity, price, discount, subtotal, saved }))
-  }).subscribe(log)
+  // .flatMap(item$ => {
+  //   const category$ = item$.map(head).last()
+  //   const quantity$ = item$.map(last).reduce(add)
+  //
+  //   const unit$ = category$.map(getUnit)
+  //   const price$ = category$.map(getPrice)
+  //   const discount$ = category$.map(getFormulae)
+  //
+  //   const unitQuantity$ = zip(quantity$, unit$, add)
+  //
+  //   const subtotalWithOutDiscount$ = zip(quantity$, price$, multiply)
+  //   const subtotal$ = zip(price$, quantity$, discount$,
+  //     (price, quantity, discount) => discount(price, quantity))
+  //
+  //   const saved$ = zip(subtotalWithOutDiscount$, subtotal$, subtract)
+  //
+  //   return zip(category$, unitQuantity$, price$, discount$, subtotal$, saved$,
+  //     (category, unitQuantity, price, discount, subtotal, saved) =>
+  //       ({ category, unitQuantity, price, discount, subtotal, saved }))
+  // }).subscribe(console::console.log)
