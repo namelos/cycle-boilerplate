@@ -10,8 +10,11 @@
     "babel-preset-stage-0": "^6.5.0",
     "browser-sync": "^2.11.1",
     "browser-sync-webpack-plugin": "^1.0.1",
+    "chai": "^3.5.0",
+    "chai-virtual-dom": "^1.0.0",
     "cross-env": "^1.0.6",
     "express": "^4.13.3",
+    "mocha": "^2.4.5",
     "rimraf": "^2.4.3",
     "webpack": "^1.12.9",
     "webpack-dev-middleware": "^1.4.0"
