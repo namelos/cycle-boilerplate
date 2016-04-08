@@ -22,6 +22,7 @@
 
 import React from 'react'
 import ReactDOM from 'react-dom'
+import { Observable, Subject } from 'rx'
 
 const vtree = <div>
   <h4>my title</h4>
@@ -65,6 +66,21 @@ function augmentVTreeWithHandlers(vtree, index = null) {
     wasTouched = true
   }
   return wasTouched ? React.cloneElement(vtree, newProps, newChildren) : vtree
+}
+
+function select(selector) {
+  return {
+    events: function events(evType) {
+      handlers[selector] = handlers[selector] || {}
+      handlers[selector][evType] = handlers[selector][evType] || new Subject()
+      handlers[selector][evType].send = function sendIntoSubject(...args) {
+        const props = this
+        const event = { currentTarget: { props }, args }
+        handlers[selector][evType].onNext(event)
+      }
+      return handlers[selector][evType]
+    }
+  }
 }
 
 const newVtree = augmentVTreeWithHandlers(vtree)
