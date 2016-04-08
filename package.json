@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "start": "node devServer.js"
+    "start": "node devServer.js",
+    "test": "mocha --watch --compilers js:babel-core/register src/*spec.js"
   },
   "devDependencies": {
     "babel-core": "^6.3.15",
@@ -24,6 +25,8 @@
     "@cycle/dom": "^9.1.0",
     "@cycle/http": "^8.2.0",
     "@cycle/isolate": "^1.2.0",
+    "react": "^15.0.0",
+    "react-dom": "^15.0.0",
     "rx": "^4.0.8",
     "rxjs-es": "^5.0.0-beta.2"
   }

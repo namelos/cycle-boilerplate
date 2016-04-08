@@ -1,50 +1,73 @@
-import { run } from '@cycle/core'
-import { makeDOMDriver, hJSX } from '@cycle/dom'
-import { makeHTTPDriver } from '@cycle/http'
-import isolate from '@cycle/isolate'
-import { Observable } from 'rx'
-const { of, just, combineLatest } = Observable
+// import React from 'react'
+// import ReactDOM from 'react-dom'
+//
+// import Cycle from '@cycle/core'
+// import { makeDOMDriver, p } from '@cycle/dom'
+// import { Observable } from 'rx'
+//
+// function main({ DOM }) {
+//   return {
+//     DOM: DOM
+//       .select('p')
+//       .events('click')
+//       .map('clicked')
+//       .startWith('init')
+//       .map(data => p(data))
+//   }
+// }
+//
+// Cycle.run(main, {
+//   DOM: makeDOMDriver('#app')
+// })
 
-const LabeledSlider = ({ DOM, props$ }) => {
-  const initialValue$ = props$.map(({ initial }) => initial).first()
+import React from 'react'
+import ReactDOM from 'react-dom'
 
-  const newValue$ = DOM.select('.slider').events('input').map(e => e.target.value)
+const vtree = <div>
+  <h4>my title</h4>
+  <p>my content</p>
+</div>
 
-  const value$ = initialValue$.concat(newValue$)
-
-  const vtree$ = combineLatest(props$, value$,
-    ({ label, unit, min, max }, value) => <div className="label-slider">
-      <span className="label">{label} {value}{unit}</span>
-      <input type="range" className="slider" min={min} max={max} value={value} />
-    </div>)
-
-  return { DOM: vtree$, value$ }
+function isChildReactElement(child) {
+  return !!child && typeof child === `object` && child._isReactElement
 }
 
-const WeightSlider = isolate(LabeledSlider, 'weight')
-const HeightSlider = isolate(LabeledSlider, 'height')
+let handlers = {}
 
-const main = ({ DOM }) => {
-  const weightProps$ = of({ label: 'Weight', unit: 'kg', min: 40, max: 150, initial: 70 })
-  const heightProps$ = of({ label: 'Height', unit: 'cm', min: 140, max: 210, initial: 170 })
+function augmentVTreeWithHandlers(vtree, index = null) {
+  if (typeof vtree === `string` || typeof vtree === `number`)
+    return vtree
 
-  const weightSlider = WeightSlider({ DOM, props$: weightProps$ })
-  const heightSlider = HeightSlider({ DOM, props$: heightProps$ })
+  let newProps = {}
 
-  const bmi$ = combineLatest(weightSlider.value$, heightSlider.value$, (weight, height) =>
-    Math.round(weight / (height * 0.01 * height * 0.01)))
+  if (!vtree.props.selector && !!index)
+    newProps.selector = index
 
-  return {
-    DOM: bmi$.combineLatest(weightSlider.DOM, heightSlider.DOM,
-      (bmi, weightVTree, heightVTree) => <div>
-        { weightVTree }
-        { heightVTree }
-        bmi { bmi }
-      </div>
-    )
+  let wasTouched = false
+
+  if (handlers[vtree.props.selector]) {
+    for (let evType in handlers[vtree.props.selector]) {
+      if (handlers[vtree.props.selector].hasOwnProperty(evType)) {
+        let handlerFnName = `on${evType.charAt(0).toUpperCase()}${evType.slice(1)}`
+        newProps[handlerFnName] = handlers[vtree.props.selector][evType].send
+        wasTouched = true
+      }
+    }
   }
+
+  let newChildren = vtree.props.children
+
+  if (Array.isArray(vtree.props.children)) {
+    newChildren = vtree.props.children.map(augmentVTreeWithHandlers)
+    wasTouched = true
+  } else if (isChildReactElement(vtree.props.children)) {
+    newChildren = augmentVTreeWithHandlers(vtree.props.children)
+    wasTouched = true
+  }
+  return wasTouched ? React.cloneElement(vtree, newProps, newChildren) : vtree
 }
 
-run(main, {
-  DOM: makeDOMDriver('#app')
-})
+const newVtree = augmentVTreeWithHandlers(vtree)
+
+ReactDOM.render(newVtree,
+  document.querySelector('#app'))
